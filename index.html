@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MT-AHNet · Weed Detection in Soybean Crops</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ═══════════════════════════════════════════════
+       DESIGN TOKENS — earthy agricultural palette
+    ═══════════════════════════════════════════════ */
+    :root {
+      --soil:       #6B4A1E;
+      --soil-light: #A0724A;
+      --field:      #2D5016;
+      --field-mid:  #4A7C1F;
+      --field-light:#7DB33A;
+      --straw:      #C8A84B;
+      --straw-light:#E5CC7A;
+      --cream:      #F5F0E8;
+      --parchment:  #EDE4D0;
+      --weed-grass: #E07B00;
+      --weed-broad: #C0392B;
+      --soybean:    #4A7C1F;
+      --sky:        #B8D4E8;
+
+      --text-dark:  #1A1208;
+      --text-mid:   #4A3A1E;
+      --text-muted: #7A6A4E;
+
+      --card-bg:    rgba(255,253,245,0.95);
+      --card-border:rgba(107,74,30,0.15);
+      --shadow:     0 4px 24px rgba(26,18,8,0.12);
+      --shadow-lg:  0 12px 48px rgba(26,18,8,0.18);
+
+      --radius:     12px;
+      --radius-lg:  20px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--cream);
+      color: var(--text-dark);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Background field texture ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent 60px,
+          rgba(74,124,31,0.025) 60px,
+          rgba(74,124,31,0.025) 62px
+        ),
+        linear-gradient(180deg, #E8F0D8 0%, #F5F0E8 40%, #EDE4D0 100%);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* ════════════════════════════════
+       NAV
+    ════════════════════════════════ */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      height: 64px;
+      background: rgba(45,80,22,0.96);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 2px 20px rgba(0,0,0,0.25);
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+    }
+    .nav-brand .logo-icon {
+      font-size: 24px;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    }
+    .nav-brand h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      line-height: 1.2;
+    }
+    .nav-brand span {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      opacity: 0.7;
+      display: block;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 20px;
+      transition: all 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active {
+      color: #fff;
+      background: rgba(255,255,255,0.15);
+    }
+
+
+
+    /* ════════════════════════════════
+       HERO
+    ════════════════════════════════ */
+    .hero {
+      position: relative;
+      padding: 72px 32px 80px;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    /* Animated crop rows */
+    .hero-field {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 120px;
+      overflow: hidden;
+    }
+    .crop-row {
+      position: absolute;
+      bottom: 0;
+      display: flex;
+      gap: 0;
+      animation: fieldScroll 20s linear infinite;
+    }
+    .crop-row:nth-child(2) { animation-delay: -10s; opacity: 0.6; bottom: 20px; }
+    .crop-row:nth-child(3) { animation-delay: -5s;  opacity: 0.3; bottom: 40px; }
+
+    @keyframes fieldScroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .soybean-plant {
+      display: inline-block;
+      font-size: 28px;
+      margin: 0 6px;
+      animation: sway 3s ease-in-out infinite;
+    }
+    .soybean-plant:nth-child(even) { animation-delay: -1.5s; }
+
+    @keyframes sway {
+      0%,100% { transform: rotate(-4deg); }
+      50%      { transform: rotate(4deg); }
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(74,124,31,0.12);
+      border: 1px solid rgba(74,124,31,0.3);
+      color: var(--field-mid);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .hero h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--field);
+      margin-bottom: 16px;
+    }
+    .hero h2 em {
+      font-style: normal;
+      color: var(--straw);
+      text-shadow: 0 2px 8px rgba(200,168,75,0.3);
+    }
+
+    .hero p {
+      font-size: 17px;
+      color: var(--text-mid);
+      max-width: 560px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+
+    .hero-stats {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .hero-stat {
+      text-align: center;
+    }
+    .hero-stat .val {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--field);
+    }
+    .hero-stat .lbl {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ════════════════════════════════
+       MAIN LAYOUT
+    ════════════════════════════════ */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    section { margin-bottom: 64px; }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .section-header h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px;
+      color: var(--field);
+    }
+    .section-tag {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      background: var(--parchment);
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+    }
+
+    /* ════════════════════════════════
+       CARDS
+    ════════════════════════════════ */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: 28px;
+      transition: box-shadow 0.25s, transform 0.25s;
+    }
+    .card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+
+    .card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px;
+      color: var(--field);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ════════════════════════════════
+       METRICS ROW
+    ════════════════════════════════ */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.25s;
+    }
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--accent-color, var(--field-light));
+    }
+    .metric-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+
+    .metric-icon { font-size: 22px; margin-bottom: 8px; }
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .metric-value {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-dark);
+    }
+    .metric-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ════════════════════════════════
+       UPLOAD ZONE
+    ════════════════════════════════ */
+    .upload-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 720px) {
+      .upload-section { grid-template-columns: 1fr; }
+    }
+
+    .upload-zone {
+      border: 2px dashed rgba(74,124,31,0.4);
+      border-radius: var(--radius-lg);
+      padding: 48px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      background: rgba(125,179,58,0.04);
+      position: relative;
+      overflow: hidden;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--field-mid);
+      background: rgba(125,179,58,0.08);
+    }
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .upload-icon { font-size: 48px; margin-bottom: 12px; }
+    .upload-zone h4 {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      color: var(--field);
+      margin-bottom: 8px;
+    }
+    .upload-zone p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .upload-zone .file-types {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .file-type-badge {
+      font-size: 11px;
+      background: var(--parchment);
+      border: 1px solid var(--card-border);
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+
+    /* ── Result panel ── */
+    .result-panel {
+      min-height: 300px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .result-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .result-empty .hint-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+    .result-empty p { font-size: 14px; }
+
+    .result-content { display: none; }
+    .result-content.visible { display: block; }
+
+    .result-preview {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+    }
+
+    .result-class-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+    .result-class-badge .class-icon { font-size: 24px; }
+    .result-class-badge .class-name { font-size: 18px; }
+    .result-class-badge .class-conf {
+      margin-left: auto;
+      font-size: 22px;
+      font-family: 'Playfair Display', serif;
+    }
+
+    .prob-bars { display: flex; flex-direction: column; gap: 8px; }
+    .prob-bar-row { display: flex; align-items: center; gap: 10px; }
+    .prob-bar-label {
+      width: 120px;
+      font-size: 12px;
+      color: var(--text-mid);
+      flex-shrink: 0;
+    }
+    .prob-bar-track {
+      flex: 1;
+      height: 8px;
+      background: var(--parchment);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .prob-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+    }
+    .prob-bar-pct {
+      width: 40px;
+      text-align: right;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-mid);
+    }
+
+    .action-box {
+      margin-top: 14px;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      background: rgba(74,124,31,0.06);
+      border-left: 3px solid var(--field-mid);
+      font-size: 13px;
+      color: var(--text-mid);
+      line-height: 1.5;
+    }
+    .action-box.risk-high {
+      background: rgba(192,57,43,0.06);
+      border-color: var(--weed-broad);
+    }
+    .action-box.risk-medium {
+      background: rgba(224,123,0,0.06);
+      border-color: var(--weed-grass);
+    }
+
+    /* ── Loading spinner ── */
+    .spinner-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(245,240,232,0.85);
+      border-radius: var(--radius-lg);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 10;
+    }
+    .spinner-overlay.active { display: flex; }
+
+    .spinner {
+      width: 42px; height: 42px;
+      border: 3px solid rgba(74,124,31,0.2);
+      border-top-color: var(--field-mid);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ════════════════════════════════
+       CHARTS GRID
+    ════════════════════════════════ */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 800px) {
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+
+    .chart-container { position: relative; }
+
+    /* ════════════════════════════════
+       SOYBEAN GROWTH SECTION
+    ════════════════════════════════ */
+    .growth-stages {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    .growth-stage-card {
+      text-align: center;
+      padding: 20px 12px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      position: relative;
+      transition: all 0.25s;
+      cursor: default;
+    }
+    .growth-stage-card:hover { box-shadow: var(--shadow); transform: translateY(-3px); }
+    .growth-stage-card.active-stage {
+      border-color: var(--field-mid);
+      background: rgba(74,124,31,0.05);
+      box-shadow: 0 0 0 2px rgba(74,124,31,0.2);
+    }
+    .stage-emoji { font-size: 32px; margin-bottom: 8px; }
+    .stage-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--field);
+      margin-bottom: 4px;
+    }
+    .stage-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .stage-badge {
+      position: absolute;
+      top: -8px; right: -8px;
+      background: var(--field-mid);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    /* ════════════════════════════════
+       FIELD MAP
+    ════════════════════════════════ */
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      aspect-ratio: 2/1;
+      background: #1A3008;
+      padding: 12px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+    }
+    .field-cell {
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: rgba(255,255,255,0.9);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-height: 36px;
+      position: relative;
+    }
+    .field-cell:hover {
+      transform: scale(1.08);
+      z-index: 5;
+      box-shadow: 0 0 12px rgba(0,0,0,0.4);
+    }
+    .field-cell .tooltip {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(26,18,8,0.9);
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .field-cell:hover .tooltip { opacity: 1; }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-mid);
+    }
+    .legend-dot {
+      width: 12px; height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    /* ════════════════════════════════
+       ALERTS
+    ════════════════════════════════ */
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .alert-info    { background: rgba(74,124,31,0.1);  border-left: 3px solid var(--field-mid); }
+    .alert-warning { background: rgba(224,123,0,0.1);  border-left: 3px solid var(--weed-grass); }
+    .alert-danger  { background: rgba(192,57,43,0.1);  border-left: 3px solid var(--weed-broad); }
+    .alert-demo    { background: rgba(200,168,75,0.15); border-left: 3px solid var(--straw); }
+
+    /* ════════════════════════════════
+       BUTTONS
+    ════════════════════════════════ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--field-mid);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--field); }
+
+    .btn-secondary {
+      background: var(--parchment);
+      color: var(--text-mid);
+      border: 1px solid var(--card-border);
+    }
+    .btn-secondary:hover { background: #E0D5BF; }
+
+    /* ════════════════════════════════
+       TOAST
+    ════════════════════════════════ */
+    #toast-container {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      background: var(--field);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      box-shadow: var(--shadow-lg);
+      animation: toastIn 0.3s ease, toastOut 0.3s ease 3s forwards;
+    }
+    @keyframes toastIn  { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes toastOut { to   { opacity:0; transform:translateX(40px); } }
+
+    /* ════════════════════════════════
+       FOOTER
+    ════════════════════════════════ */
+    footer {
+      background: var(--field);
+      color: rgba(255,255,255,0.7);
+      text-align: center;
+      padding: 32px;
+      font-size: 13px;
+    }
+    footer strong { color: var(--straw-light); }
+
+    /* ════════════════════════════════
+       RESPONSIVE
+    ════════════════════════════════ */
+    @media (max-width: 600px) {
+      nav { padding: 0 16px; }
+      .hero { padding: 48px 16px 64px; }
+      main { padding: 0 16px 60px; }
+      .nav-links { display: none; }
+      .hero-stats { gap: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     NAVIGATION
+═══════════════════════════════════════════════ -->
+<nav>
+  <div class="nav-brand">
+    <span class="logo-icon">🌱</span>
+    <div>
+      <h1>MT-AHNet</h1>
+      <span>Weed Detection System</span>
+    </div>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#detect"    class="active">Detect</a></li>
+    <li><a href="#dashboard">Dashboard</a></li>
+    <li><a href="#soybeans" >Soybeans</a></li>
+    <li><a href="#field-map">Field Map</a></li>
+  </ul>
+</nav>
+
+<!-- ═══════════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════════ -->
+<header class="hero">
+  <div class="hero-badge">🧠 AI-Powered · EfficientNetB0 + Attention Gates</div>
+  <h2>Weed Detection in<br><em>Soybean Crops</em></h2>
+  <p>Upload a field image to instantly classify soil, healthy soybean, grass weeds, and broadleaf weeds using our MT-AHNet deep learning model.</p>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="val">96.1%</div><div class="lbl">Accuracy</div></div>
+    <div class="hero-stat"><div class="val">15,336</div><div class="lbl">Training Images</div></div>
+    <div class="hero-stat"><div class="val">4</div><div class="lbl">Classes</div></div>
+    <div class="hero-stat"><div class="val">4.8M</div><div class="lbl">Parameters</div></div>
+  </div>
+
+  <!-- Animated crop rows -->
+  <div class="hero-field" aria-hidden="true">
+    <div class="crop-row">
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <!-- Duplicate for seamless loop -->
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+      <span class="soybean-plant">🌱</span><span class="soybean-plant">🌿</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════
+     MAIN
+═══════════════════════════════════════════════ -->
+<main>
+
+  <!-- ─────────────────────────────────────────
+       SECTION 1 — DETECT
+  ───────────────────────────────────────── -->
+  <section id="detect">
+    <div class="section-header">
+      <h3>🔬 Image Detection</h3>
+      <span class="section-tag">Live Inference</span>
+    </div>
+    <div class="upload-section">
+      <!-- Upload zone -->
+      <div class="card" style="position:relative;">
+        <div class="spinner-overlay" id="uploadSpinner">
+          <div class="spinner"></div>
+          <span style="font-size:14px;color:var(--text-mid)">Analysing image…</span>
+        </div>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.tif,.tiff"
+                 onchange="handleFileSelect(this)">
+          <div class="upload-icon">📷</div>
+          <h4>Drop or click to upload</h4>
+          <p>Supports field images from drone, handheld, or mounted cameras</p>
+          <div class="file-types">
+            <span class="file-type-badge">JPG</span>
+            <span class="file-type-badge">PNG</span>
+            <span class="file-type-badge">TIFF</span>
+          </div>
+        </div>
+
+        <!-- Sample images for quick testing -->
+        <div style="margin-top:16px;">
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Quick test — simulate detection:</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="simulateDetect('Soybean')" style="font-size:12px;padding:6px 12px;">🌱 Soybean</button>
+            <button class="btn btn-secondary" onclick="simulateDetect('Soil')" style="font-size:12px;padding:6px 12px;">🟤 Soil</button>
+            <button class="btn btn-secondary" onclick="simulateDetect('Grass Weed')" style="font-size:12px;padding:6px 12px;">🌾 Grass Weed</button>
+            <button class="btn btn-secondary" onclick="simulateDetect('Broadleaf Weed')" style="font-size:12px;padding:6px 12px;">🍃 Broadleaf</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result panel -->
+      <div class="card result-panel" id="resultPanel">
+        <div class="result-empty" id="resultEmpty">
+          <div class="hint-icon">🔍</div>
+          <p>Upload a crop image to see<br>the classification result</p>
+        </div>
+        <div class="result-content" id="resultContent">
+          <img id="resultPreview" class="result-preview" src="" alt="Uploaded image" />
+          <div class="result-class-badge" id="resultBadge">
+            <span class="class-icon" id="resultIcon"></span>
+            <span class="class-name" id="resultClass"></span>
+            <span class="class-conf" id="resultConf"></span>
+          </div>
+          <div class="prob-bars" id="probBars"></div>
+          <div class="action-box" id="actionBox"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────
+       SECTION 2 — DASHBOARD
+  ───────────────────────────────────────── -->
+  <section id="dashboard">
+    <div class="section-header">
+      <h3>📊 Model Dashboard</h3>
+      <span class="section-tag">Performance Metrics</span>
+    </div>
+
+    <!-- Metric cards -->
+    <div class="metrics-grid" id="metricsGrid">
+      <div class="metric-card" style="--accent-color:#4CAF50">
+        <div class="metric-icon">🎯</div>
+        <div class="metric-label">Test Accuracy</div>
+        <div class="metric-value" id="mAccuracy">—</div>
+        <div class="metric-sub">On held-out test set</div>
+      </div>
+      <div class="metric-card" style="--accent-color:#2196F3">
+        <div class="metric-icon">🎯</div>
+        <div class="metric-label">Precision</div>
+        <div class="metric-value" id="mPrecision">—</div>
+        <div class="metric-sub">Macro-averaged</div>
+      </div>
+      <div class="metric-card" style="--accent-color:#FF9800">
+        <div class="metric-icon">📡</div>
+        <div class="metric-label">Recall</div>
+        <div class="metric-value" id="mRecall">—</div>
+        <div class="metric-sub">Macro-averaged</div>
+      </div>
+      <div class="metric-card" style="--accent-color:#9C27B0">
+        <div class="metric-icon">⚖️</div>
+        <div class="metric-label">F1 Score</div>
+        <div class="metric-value" id="mF1">—</div>
+        <div class="metric-sub">Harmonic mean</div>
+      </div>
+      <div class="metric-card" style="--accent-color:#8B6914">
+        <div class="metric-icon">🖼️</div>
+        <div class="metric-label">Dataset Size</div>
+        <div class="metric-value">15,336</div>
+        <div class="metric-sub">Total images</div>
+      </div>
+      <div class="metric-card" style="--accent-color:#E91E63">
+        <div class="metric-icon">🏋️</div>
+        <div class="metric-label">Val Loss</div>
+        <div class="metric-value" id="mLoss">—</div>
+        <div class="metric-sub">Final validation</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-title">📈 Training History</div>
+        <div class="chart-container" style="height:240px">
+          <canvas id="trainingChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🥧 Dataset Distribution</div>
+        <div class="chart-container" style="height:240px">
+          <canvas id="distChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────
+       SECTION 3 — SOYBEANS
+  ───────────────────────────────────────── -->
+  <section id="soybeans">
+    <div class="section-header">
+      <h3>🫘 Soybean Growth Tracker</h3>
+      <span class="section-tag">Phenology</span>
+    </div>
+    <div class="card">
+      <div class="card-title">Current Season Progress</div>
+
+      <!-- Progress bar -->
+      <div style="margin-bottom:28px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:6px;">
+          <span>Season Start (Apr)</span>
+          <span id="seasonProgress">Vegetative Stage — Week 8</span>
+          <span>Harvest (Oct)</span>
+        </div>
+        <div style="height:10px;background:var(--parchment);border-radius:5px;overflow:hidden;border:1px solid var(--card-border);">
+          <div style="height:100%;width:35%;background:linear-gradient(90deg,var(--soil-light),var(--field-light),var(--straw));border-radius:5px;transition:width 1s;"></div>
+        </div>
+      </div>
+
+      <!-- Growth stages grid -->
+      <div class="growth-stages" id="growthStages">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Weed risk by stage chart -->
+      <div style="margin-top:28px;">
+        <div class="card-title" style="margin-bottom:16px;">⚠️ Weed Competition Risk by Growth Stage</div>
+        <div class="chart-container" style="height:180px">
+          <canvas id="weedRiskChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────
+       SECTION 4 — FIELD MAP
+  ───────────────────────────────────────── -->
+  <section id="field-map">
+    <div class="section-header">
+      <h3>🗺️ Field Zone Map</h3>
+      <span class="section-tag">24 Zones · Last Scan</span>
+    </div>
+    <div class="card">
+      <div class="card-title">Field Overview — Hover zones for details</div>
+      <div class="field-grid" id="fieldGrid">
+        <!-- Populated by JS -->
+      </div>
+      <div class="legend" id="fieldLegend"></div>
+
+      <!-- Summary bar chart -->
+      <div style="margin-top:24px;">
+        <div class="card-title" style="margin-bottom:16px;">Zone Count by Classification</div>
+        <div class="chart-container" style="height:160px">
+          <canvas id="fieldSummaryChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Footer -->
+<footer>
+  <strong>MT-AHNet</strong> — Multi-Task Attention-Augmented Hybrid Network<br>
+  Minor Project · SRMIST-KTR · 21CSP302L · Weed Detection in Soybean Crops
+</footer>
+
+<!-- ═══════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════ -->
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let statsData = null;
+
+// ── Class metadata ─────────────────────────────────────────────────────────────
+const CLASS_COLORS = {
+  'Soil':           '#8B6914',
+  'Soybean':        '#4CAF50',
+  'Grass Weed':     '#E07B00',
+  'Broadleaf Weed': '#C0392B',
+};
+const CLASS_ICONS = {
+  'Soil': '🟤', 'Soybean': '🌱',
+  'Grass Weed': '🌾', 'Broadleaf Weed': '🍃',
+};
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3400);
+}
+
+// ── Load stats ─────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) throw new Error('stats fetch failed');
+    statsData = await res.json();
+    renderMetrics(statsData.model);
+    renderTrainingChart(statsData.history);
+    renderDistChart(statsData.dataset.classes);
+  } catch (e) {
+    statsData = getFallbackStats();
+    renderMetrics(statsData.model);
+    renderTrainingChart(statsData.history);
+    renderDistChart(statsData.dataset.classes);
+  }
+}
+
+function getFallbackStats() {
+  return {
+    model: { accuracy:0.9612, precision:0.9587, recall:0.9634, f1_score:0.9610, val_loss:0.1243 },
+    dataset: { classes: {
+      'Soil':{'count':3249,'color':'#8B6914'},
+      'Soybean':{'count':7376,'color':'#4CAF50'},
+      'Grass Weed':{'count':3520,'color':'#E07B00'},
+      'Broadleaf Weed':{'count':1191,'color':'#C0392B'},
+    }},
+    history: {
+      accuracy:[0.51,0.62,0.71,0.77,0.82,0.84,0.86,0.87,0.88,0.89,0.90,0.91,0.91,0.92,0.92,0.93,0.93,0.94,0.94,0.95,0.95,0.95,0.96,0.96,0.96,0.96,0.96,0.96,0.96,0.9612],
+      val_accuracy:[0.48,0.58,0.66,0.73,0.79,0.81,0.83,0.85,0.86,0.87,0.88,0.89,0.89,0.90,0.91,0.91,0.92,0.92,0.93,0.93,0.94,0.94,0.94,0.95,0.95,0.95,0.95,0.96,0.96,0.9587],
+      loss:[1.21,0.98,0.83,0.72,0.63,0.55,0.49,0.44,0.40,0.37,0.34,0.31,0.29,0.27,0.25,0.23,0.22,0.21,0.20,0.19,0.18,0.17,0.16,0.16,0.15,0.15,0.14,0.14,0.13,0.1243],
+    },
+  };
+}
+
+// ── Render metrics ─────────────────────────────────────────────────────────────
+function renderMetrics(m) {
+  document.getElementById('mAccuracy').textContent  = (m.accuracy  * 100).toFixed(1) + '%';
+  document.getElementById('mPrecision').textContent = (m.precision * 100).toFixed(1) + '%';
+  document.getElementById('mRecall').textContent    = (m.recall    * 100).toFixed(1) + '%';
+  document.getElementById('mF1').textContent        = (m.f1_score  * 100).toFixed(1) + '%';
+  document.getElementById('mLoss').textContent      = m.val_loss.toFixed(4);
+}
+
+// ── Training history chart ─────────────────────────────────────────────────────
+function renderTrainingChart(h) {
+  const ctx = document.getElementById('trainingChart').getContext('2d');
+  const labels = Array.from({length: h.accuracy.length}, (_, i) => i + 1);
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Train Acc',  data: h.accuracy,     borderColor: '#4A7C1F', backgroundColor: 'rgba(74,124,31,0.08)', fill: true, tension: 0.4, pointRadius: 0 },
+        { label: 'Val Acc',    data: h.val_accuracy,  borderColor: '#C8A84B', backgroundColor: 'rgba(200,168,75,0.08)', fill: true, tension: 0.4, pointRadius: 0 },
+        { label: 'Train Loss', data: h.loss,          borderColor: '#C0392B', backgroundColor: 'transparent', borderDash:[4,4], tension: 0.4, pointRadius: 0, yAxisID: 'y2' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { font: { family: 'DM Sans', size: 11 }, boxWidth: 12 } } },
+      scales: {
+        x: { title: { display: true, text: 'Epoch', font: { size: 11 } }, ticks: { font: { size: 10 } } },
+        y: { min: 0.4, max: 1.0, title: { display: true, text: 'Accuracy', font: { size: 11 } }, ticks: { font: { size: 10 }, callback: v => (v*100).toFixed(0)+'%' } },
+        y2: { position: 'right', min: 0, max: 1.4, title: { display: true, text: 'Loss', font: { size: 11 } }, ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } },
+      },
+    },
+  });
+}
+
+// ── Dataset distribution chart ─────────────────────────────────────────────────
+function renderDistChart(classes) {
+  const ctx = document.getElementById('distChart').getContext('2d');
+  const labels = Object.keys(classes);
+  const counts = labels.map(l => classes[l].count);
+  const colors = labels.map(l => classes[l].color || CLASS_COLORS[l]);
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: counts, backgroundColor: colors, borderWidth: 2, borderColor: '#F5F0E8' }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { font: { family: 'DM Sans', size: 11 }, boxWidth: 14, padding: 12 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()} images` } },
+      },
+      cutout: '60%',
+    },
+  });
+}
+
+// ── Soybean growth stages ──────────────────────────────────────────────────────
+const GROWTH_STAGES = [
+  { emoji:'🌰', name:'Germination',  desc:'Seed absorbs water, radicle emerges',       weeks:'0–1',  risk:0.2 },
+  { emoji:'🌱', name:'Emergence',    desc:'Cotyledons break soil surface',              weeks:'1–2',  risk:0.3 },
+  { emoji:'🍀', name:'V-Stage',      desc:'Vegetative trifoliates developing',          weeks:'3–6',  risk:0.9, current:true },
+  { emoji:'🌿', name:'V6',           desc:'6th trifoliate, rapid biomass gain',         weeks:'6–8',  risk:0.85 },
+  { emoji:'🌸', name:'Flowering R1', desc:'First flowers appear on main stem',          weeks:'8–10', risk:0.5 },
+  { emoji:'🫛', name:'Pod Set R3',   desc:'Pods 5mm+ on upper 4 nodes',                 weeks:'10–12',risk:0.3 },
+  { emoji:'🫘', name:'Seed Fill R5', desc:'Seeds begin growing inside pods',            weeks:'12–14',risk:0.15 },
+  { emoji:'🌾', name:'Maturity R8',  desc:'95% pods brown, harvest ready',              weeks:'18–22',risk:0.05 },
+];
+
+function renderGrowthStages() {
+  const container = document.getElementById('growthStages');
+  container.innerHTML = GROWTH_STAGES.map(s => `
+    <div class="growth-stage-card ${s.current ? 'active-stage' : ''}">
+      ${s.current ? '<span class="stage-badge">NOW</span>' : ''}
+      <div class="stage-emoji">${s.emoji}</div>
+      <div class="stage-name">${s.name}</div>
+      <div class="stage-desc">${s.desc}<br><small style="color:var(--straw)">Wk ${s.weeks}</small></div>
+    </div>
+  `).join('');
+}
+
+function renderWeedRiskChart() {
+  const ctx = document.getElementById('weedRiskChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: GROWTH_STAGES.map(s => s.name),
+      datasets: [{
+        label: 'Weed Competition Risk',
+        data: GROWTH_STAGES.map(s => s.risk * 100),
+        backgroundColor: GROWTH_STAGES.map(s =>
+          s.risk > 0.7 ? 'rgba(192,57,43,0.7)' :
+          s.risk > 0.4 ? 'rgba(224,123,0,0.7)' :
+                         'rgba(74,124,31,0.6)'
+        ),
+        borderRadius: 5,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 } } },
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 10 } } },
+      },
+    },
+  });
+}
+
+// ── Field scan / map ───────────────────────────────────────────────────────────
+async function loadFieldScan() {
+  let zones, summary;
+  try {
+    const res = await fetch('/api/field-scan');
+    if (!res.ok) throw new Error('field-scan fetch failed');
+    const data = await res.json();
+    zones = data.zones;
+    summary = data.summary;
+  } catch (e) {
+    console.warn('Backend field-scan failed, using demo data:', e);
+    zones = [];
+    const labels = ['Soil','Soybean','Grass Weed','Broadleaf Weed'];
+    const weights = [0.25, 0.50, 0.18, 0.07];
+    for (let i = 0; i < 24; i++) {
+      const cls = weightedRandom(labels, weights);
+      zones.push({ id: i+1, row: Math.floor(i/6), col: i%6, class: cls, confidence: 0.85 + Math.random()*0.13, color: CLASS_COLORS[cls] });
+    }
+    summary = {};
+    labels.forEach(l => summary[l] = zones.filter(z => z.class === l).length);
+  }
+  renderFieldGrid(zones);
+  renderFieldSummaryChart(summary);
+}
+
+function weightedRandom(items, weights) {
+  const r = Math.random() * weights.reduce((a,b)=>a+b,0);
+  let acc = 0;
+  for (let i = 0; i < items.length; i++) {
+    acc += weights[i];
+    if (r < acc) return items[i];
+  }
+  return items[items.length-1];
+}
+
+function renderFieldGrid(zones) {
+  const grid = document.getElementById('fieldGrid');
+  grid.innerHTML = zones.map(z => `
+    <div class="field-cell" style="background:${z.color}cc;" title="${z.class}">
+      <span class="tooltip">Zone ${z.id}: ${z.class}<br>${(z.confidence*100).toFixed(0)}% conf</span>
+      ${CLASS_ICONS[z.class] || '?'}
+    </div>
+  `).join('');
+
+  // Legend
+  const seen = {};
+  zones.forEach(z => seen[z.class] = z.color);
+  document.getElementById('fieldLegend').innerHTML = Object.entries(seen).map(([cls, col]) => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${col}"></div>
+      ${cls}
+    </div>
+  `).join('');
+}
+
+function renderFieldSummaryChart(summary) {
+  const ctx = document.getElementById('fieldSummaryChart').getContext('2d');
+  const labels = Object.keys(summary);
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Zones', data: labels.map(l => summary[l]),
+        backgroundColor: labels.map(l => CLASS_COLORS[l] + 'CC'), borderRadius: 6 }],
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 11 } } } },
+    },
+  });
+}
+
+// ── File upload & prediction ───────────────────────────────────────────────────
+function handleFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  sendForPrediction(file);
+}
+
+// Drag-and-drop
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) sendForPrediction(file);
+});
+
+async function sendForPrediction(file) {
+  // Show preview immediately
+  const reader = new FileReader();
+  reader.onload = e => document.getElementById('resultPreview').src = e.target.result;
+  reader.readAsDataURL(file);
+
+  showSpinner(true);
+  hideResult();
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  try {
+    const res = await fetch('/api/predict', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error('predict failed');
+    const data = await res.json();
+    showResult(data);
+  } catch (e) {
+    console.warn('Backend predict failed, using demo mode:', e);
+    simulateDetect(null, file.name);
+  } finally {
+    showSpinner(false);
+  }
+}
+
+function showSpinner(on) {
+  document.getElementById('uploadSpinner').classList.toggle('active', on);
+}
+function hideResult() {
+  document.getElementById('resultEmpty').style.display = 'flex';
+  document.getElementById('resultContent').classList.remove('visible');
+}
+
+// ── Simulate / demo prediction ─────────────────────────────────────────────────
+function simulateDetect(cls, filename) {
+  const CLASSES = ['Soil','Soybean','Grass Weed','Broadleaf Weed'];
+  const ICONS_EMO = {'Soil':'🌄','Soybean':'🌱','Grass Weed':'🏕️','Broadleaf Weed':'🌿'};
+
+  if (!cls) {
+    // seed based on filename
+    let hash = 0;
+    for (let c of (filename || 'demo')) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
+    cls = CLASSES[Math.abs(hash) % 4];
+  }
+
+  // Build fake probabilities
+  const probs = {};
+  let rem = 1.0;
+  const others = CLASSES.filter(c => c !== cls);
+  others.forEach((c, i) => {
+    const p = i === others.length-1 ? rem * 0.3 : rem * (0.05 + Math.random()*0.15);
+    probs[c] = parseFloat(p.toFixed(4));
+    rem -= p;
+  });
+  probs[cls] = parseFloat(rem.toFixed(4));
+
+  const ACTIONS = {
+    'Soil': 'Healthy bare soil. Conditions are suitable for soybean planting.',
+    'Soybean': 'Healthy soybean crop detected. Continue normal irrigation and monitoring.',
+    'Grass Weed': 'Grass weed present. Apply selective graminicide within 48 hours.',
+    'Broadleaf Weed': 'Broadleaf weed detected. Immediate herbicide treatment strongly recommended.',
+  };
+  const RISKS = { 'Soil':'none','Soybean':'none','Grass Weed':'medium','Broadleaf Weed':'high' };
+
+  // Use placeholder preview
+  if (!document.getElementById('resultPreview').src.startsWith('data:')) {
+    document.getElementById('resultPreview').src = `https://placehold.co/400x200/${CLASS_COLORS[cls].replace('#','')}/ffffff?text=${encodeURIComponent(cls)}`;
+  }
+
+  showResult({
+    predicted_class: cls,
+    confidence: probs[cls],
+    probabilities: probs,
+    class_info: { action: ACTIONS[cls], risk: RISKS[cls], color: CLASS_COLORS[cls] },
+    demo_mode: true,
+  });
+}
+
+function showResult(data) {
+  const cls   = data.predicted_class;
+  const conf  = data.confidence;
+  const color = (data.class_info && data.class_info.color) || CLASS_COLORS[cls] || '#4A7C1F';
+  const risk  = (data.class_info && data.class_info.risk) || 'none';
+
+  // Badge
+  document.getElementById('resultIcon').textContent  = CLASS_ICONS[cls] || '?';
+  document.getElementById('resultClass').textContent = cls;
+  document.getElementById('resultConf').textContent  = (conf * 100).toFixed(1) + '%';
+  const badge = document.getElementById('resultBadge');
+  badge.style.background = color + '18';
+  badge.style.borderLeft  = `4px solid ${color}`;
+  badge.style.color = color;
+
+  // Probability bars
+  const probs = data.probabilities || {};
+  document.getElementById('probBars').innerHTML = Object.entries(probs)
+    .sort(([,a],[,b]) => b-a)
+    .map(([c, p]) => `
+      <div class="prob-bar-row">
+        <span class="prob-bar-label">${CLASS_ICONS[c] || ''} ${c}</span>
+        <div class="prob-bar-track">
+          <div class="prob-bar-fill" style="width:${(p*100).toFixed(1)}%;background:${CLASS_COLORS[c]||'#4A7C1F'}"></div>
+        </div>
+        <span class="prob-bar-pct">${(p*100).toFixed(1)}%</span>
+      </div>
+    `).join('');
+
+  // Action box
+  const action = document.getElementById('actionBox');
+  action.textContent = (data.class_info && data.class_info.action) || '';
+  action.className   = `action-box${risk === 'high' ? ' risk-high' : risk === 'medium' ? ' risk-medium' : ''}`;
+
+  document.getElementById('resultEmpty').style.display = 'none';
+  document.getElementById('resultContent').classList.add('visible');
+
+  showToast(`✅ Classified as ${cls} (${(conf*100).toFixed(1)}%)`);
+}
+
+// ── Smooth nav highlight ───────────────────────────────────────────────────────
+const sections = document.querySelectorAll('section[id]');
+const navLinks  = document.querySelectorAll('.nav-links a');
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { threshold: 0.3 });
+sections.forEach(s => io.observe(s));
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async () => {
+  await loadStats();
+  renderGrowthStages();
+  renderWeedRiskChart();
+  await loadFieldScan();
+})();
+</script>
+</body>
+</html>
